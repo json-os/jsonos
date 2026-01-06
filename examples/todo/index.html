@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jsonos Todo Example</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    h1 { color: #6366f1; }
+    .todo { padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; }
+    .completed { text-decoration: line-through; color: #94a3b8; }
+    pre { background: #f1f5f9; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>jsonos Todo Example</h1>
+  <p>Open the browser console to see jsonos in action.</p>
+
+  <h2>Tasks</h2>
+  <div id="todos">Loading...</div>
+
+  <h2>Raw Data</h2>
+  <pre id="raw"></pre>
+
+  <script type="module">
+    import { JsonOS } from 'https://esm.sh/jsonos';
+
+    // Example with demo data
+    const demoData = [
+      {
+        "@context": { "@vocab": "urn:solid:" },
+        "@id": "#this",
+        "@type": "Tracker",
+        "title": "Demo Tasks"
+      },
+      {
+        "@id": "#1",
+        "@type": "Task",
+        "title": "Learn jsonos",
+        "completed": false,
+        "created": new Date().toISOString()
+      },
+      {
+        "@id": "#2",
+        "@type": "Task",
+        "title": "Build something cool",
+        "completed": false,
+        "created": new Date().toISOString()
+      }
+    ];
+
+    // Create JsonOS instance (using in-memory for demo)
+    const os = new JsonOS();
+
+    // Simulate reading (in real app, this would fetch from URL)
+    async function demo() {
+      // Add view layer to demo data
+      const enhanced = demoData.map(item => ({
+        ...item,
+        _view: {
+          title: item.title,
+          completed: item.completed ?? false
+        },
+        _format: 'schema'
+      }));
+
+      console.log('📦 jsonos loaded data:', enhanced);
+
+      // Display in UI
+      const todosEl = document.getElementById('todos');
+      const rawEl = document.getElementById('raw');
+
+      const tasks = enhanced.filter(t => t['@type'] === 'Task');
+
+      todosEl.innerHTML = tasks.map(t => `
+        <div class="todo ${t._view.completed ? 'completed' : ''}">
+          ${t._view.title}
+        </div>
+      `).join('');
+
+      rawEl.textContent = JSON.stringify(enhanced, null, 2);
+    }
+
+    demo();
+  </script>
+</body>
+</html>
