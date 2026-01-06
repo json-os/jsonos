@@ -13,6 +13,20 @@ const PREFIXES = {
   'solid:': 'http://www.w3.org/ns/solid/terms#'
 };
 
+// wf: state mapping
+const WF_STATES = {
+  'Research': { label: 'Research', color: '#9ca3af', open: true },
+  'Someday': { label: 'Someday', color: '#9ca3af', open: true },
+  'ToBeDone': { label: 'To Do', color: '#10b981', open: true },
+  'NextSession': { label: 'Next', color: '#22c55e', open: true },
+  'InProgress': { label: 'In Progress', color: '#f59e0b', open: true },
+  'Open': { label: 'Open', color: '#3b82f6', open: true },
+  'Works': { label: 'Works', color: '#8b5cf6', open: false },
+  'Released': { label: 'Released', color: '#ec4899', open: false },
+  'Done': { label: 'Done', color: '#10b981', open: false }
+};
+
+
 /**
  * Main JsonOS class
  */
@@ -120,6 +134,89 @@ export class JsonOS {
   }
 
   /**
+   * Render data to the DOM
+   * @param {Array} data - Data with view layer
+   * @param {HTMLElement|string} [container] - Container element or selector (defaults to body)
+   */
+  render(data, container = document.body) {
+    const target = typeof container === 'string'
+      ? document.querySelector(container)
+      : container;
+
+    if (!target) {
+      throw new Error(`Container not found: ${container}`);
+    }
+
+    // Detect format and pick renderer
+    const format = data[0]?._format || this.detectFormat(data);
+    const items = data.filter(d => d._view?.title && !d._view?.isTracker);
+
+    // Find tracker for title
+    const tracker = data.find(d => d._view?.isTracker || d['@type'] === 'Tracker');
+    const title = tracker?._view?.title || tracker?.title || 'Items';
+
+    // Build HTML
+    const html = `
+      <div class="jsonos-container" data-format="${format}">
+        <h2 class="jsonos-title">${this._escapeHtml(title)}</h2>
+        <ul class="jsonos-list">
+          ${items.map(item => this._renderItem(item)).join('')}
+        </ul>
+        ${items.length === 0 ? '<p class="jsonos-empty">No items</p>' : ''}
+      </div>
+    `;
+
+    target.innerHTML = html;
+    this._injectStyles();
+  }
+
+  _renderItem(item) {
+    const view = item._view;
+    const completedClass = view.completed ? 'jsonos-completed' : '';
+    const stateHtml = view.state
+      ? `<span class="jsonos-state" style="background:${view.state.color}20;color:${view.state.color};border-color:${view.state.color}40">${this._escapeHtml(view.state.label)}</span>`
+      : '';
+
+    return `
+      <li class="jsonos-item ${completedClass}" data-id="${item['@id'] || ''}">
+        <span class="jsonos-checkbox">${view.completed ? '✓' : ''}</span>
+        <span class="jsonos-item-title">${this._escapeHtml(view.title)}</span>
+        ${stateHtml}
+      </li>
+    `;
+  }
+
+  _escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  _injectStyles() {
+    if (document.getElementById('jsonos-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'jsonos-styles';
+    style.textContent = `
+      .jsonos-container { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; }
+      .jsonos-title { font-size: 1.5rem; margin-bottom: 1rem; color: #1e293b; }
+      .jsonos-list { list-style: none; padding: 0; margin: 0; }
+      .jsonos-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid #e2e8f0; }
+      .jsonos-item.jsonos-completed { opacity: 0.6; }
+      .jsonos-item.jsonos-completed .jsonos-item-title { text-decoration: line-through; }
+      .jsonos-checkbox { width: 20px; height: 20px; border: 2px solid #e2e8f0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #10b981; }
+      .jsonos-item.jsonos-completed .jsonos-checkbox { background: #10b981; border-color: #10b981; color: white; }
+      .jsonos-item-title { flex: 1; }
+      .jsonos-state { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid; font-weight: 600; }
+      .jsonos-empty { color: #64748b; text-align: center; padding: 2rem; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
    * Extract a value from an item using multiple predicate attempts
    * @param {Object} item - The item to extract from
    * @param {...string} predicates - Predicates to try in order
@@ -217,15 +314,25 @@ export class JsonOS {
         };
       }
 
-      // Determine completion from wf: states
-      const openStates = ['Research', 'Someday', 'ToBeDone', 'NextSession', 'InProgress', 'Open'];
-      const isOpen = types.some(t => t && openStates.some(s => t.includes(s)));
+      // Find state from types
+      let state = null;
+      for (const t of types) {
+        if (!t) continue;
+        for (const [key, value] of Object.entries(WF_STATES)) {
+          if (t.includes(key)) {
+            state = { key, ...value };
+            break;
+          }
+        }
+        if (state) break;
+      }
 
       return {
         title: this.extractValue(item, 'dc:title', 'dct:title', 'rdfs:label') || 'Untitled',
-        completed: !isOpen,
+        completed: state ? !state.open : false,
         created: this.extractValue(item, 'dct:created', 'dc:created'),
-        description: this.extractValue(item, 'wf:description', 'dct:description')
+        description: this.extractValue(item, 'wf:description', 'dct:description'),
+        state: state
       };
     }
 
@@ -237,5 +344,8 @@ export class JsonOS {
   }
 }
 
-// Default export
-export default JsonOS;
+// Default instance for quick usage: import os from 'jsonos'
+const os = new JsonOS();
+
+// Default export is the instance
+export default os;

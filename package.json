@@ -1,6 +1,6 @@
 {
   "name": "jsonos",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "JSON Operating System - A lightweight framework for building decentralized applications with JSON-LD",
   "type": "module",
   "main": "src/index.js",
